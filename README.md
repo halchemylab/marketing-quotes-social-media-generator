@@ -2,7 +2,7 @@
 
 This project generates marketing quotes for social media platforms. It aims to provide engaging and inspiring content for marketing campaigns.
 
-![Marketing Quotes Generator](https://imgur.com/a/oxw8fxi)
+![Marketing Quotes Generator](https://i.imgur.com/PMNxAoO.png)
 
 ## Features
 
