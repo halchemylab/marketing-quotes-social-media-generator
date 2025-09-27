@@ -18,9 +18,9 @@ class QuoteCardGenerator:
     def __init__(self, root):
         self.root = root
         self.root.title("Quote Card Generator")
-        self.root.geometry("600x550")  # Increased height for new button
+        self.root.geometry("600x600")  # Increased height for new widgets
         self.root.configure(bg="#f5f5f5")
-        
+
         # Template paths
         self.template_paths = {
             "lime": "lime.jpg",
@@ -29,13 +29,26 @@ class QuoteCardGenerator:
             "purple": "purple.jpg",
             "yellow": "yellow.jpg",
         }
-        
+
         # List of colors for random selection
         self.colors = list(self.template_paths.keys())
-        
+
+        # Topics for quote generation
+        self.topics = [
+            "Random",
+            "Success & Ambition",
+            "Wisdom & Knowledge",
+            "Creativity & Innovation",
+            "Perseverance & Resilience",
+            "Humanity & Kindness",
+            "Change & Growth",
+            "Courage & Fear",
+        ]
+
         # Variables
         self.template_color = tk.StringVar(value="lime")
         self.author = tk.StringVar()
+        self.topic = tk.StringVar(value="Random")
         
         self.create_widgets()
         
@@ -66,6 +79,17 @@ class QuoteCardGenerator:
         tk.Label(quote_frame, text="Author:", bg="#f5f5f5").grid(row=1, column=0, sticky=tk.W, pady=5)
         author_entry = tk.Entry(quote_frame, textvariable=self.author, width=50)
         author_entry.grid(row=1, column=1, pady=5, padx=5)
+
+        # Topic
+        tk.Label(quote_frame, text="Topic:", bg="#f5f5f5").grid(row=2, column=0, sticky=tk.W, pady=5)
+        topic_dropdown = ttk.Combobox(
+            quote_frame,
+            textvariable=self.topic,
+            values=self.topics,
+            state="readonly",
+            width=47
+        )
+        topic_dropdown.grid(row=2, column=1, pady=5, padx=5)
         
         # Template selection
         template_frame = tk.LabelFrame(main_frame, text="Template Settings", padx=10, pady=10, bg="#f5f5f5")
@@ -172,39 +196,48 @@ class QuoteCardGenerator:
         """Generate a quote using OpenAI API"""
         if not API_KEY:
             messagebox.showerror(
-                "Error", 
+                "Error",
                 "API Key missing. Please add OPENAI_API_KEY=your_key to a .env file in the same directory."
             )
             return
-        
+
         self.status_var.set("Generating quote...")
         self.root.update()
-        
+
         try:
+            topic = self.topic.get()
+            if topic == "Random":
+                # Exclude "Random" from the choice
+                chosen_topic = random.choice(self.topics[1:])
+            else:
+                chosen_topic = topic
+
+            prompt = f"Generate a timeless and inspiring quote (max 50 characters) about \"{chosen_topic}\" and its author. The quote should be relevant no matter the timeline."
+
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": "You are a quote generator."},
-                    {"role": "user", "content": "Generate an inspiring quote (max 50 characters) and its author:"}
+                    {"role": "system", "content": "You are a quote generator who creates timeless and relevant quotes."},
+                    {"role": "user", "content": prompt}
                 ],
                 max_tokens=50,
-                temperature=0.7,
+                temperature=0.9,  # Increased for more creativity
             )
             text = response.choices[0].message.content.strip()
-            
+
             # Split into quote and author
             parts = text.split('-')
             if len(parts) > 1:
-                quote_text = parts[0].strip()
-                author_text = parts[1].strip()
+                quote_text = '-'.join(parts[:-1]).strip()
+                author_text = parts[-1].strip()
             else:
                 quote_text = text
                 author_text = "Unknown"
-            
+
             self.quote_textarea.delete("1.0", tk.END)
             self.quote_textarea.insert(tk.END, quote_text)
             self.author.set(author_text)
-            self.status_var.set("Quote generated successfully")
+            self.status_var.set(f"Generated a quote about {chosen_topic}")
         except Exception as e:
             self.status_var.set("Error")
             messagebox.showerror("Error", f"OpenAI API Error: {e}")
@@ -213,48 +246,54 @@ class QuoteCardGenerator:
         """Generate a random quote, author, and color and save the card"""
         if not API_KEY:
             messagebox.showerror(
-                "Error", 
+                "Error",
                 "API Key missing. Please add OPENAI_API_KEY=your_key to a .env file in the same directory."
             )
             return
-            
+
         self.status_var.set("Generating random quote card...")
         self.root.update()
-        
+
         try:
-            # Generate random quote
+            # Choose a random topic from the list (excluding "Random")
+            chosen_topic = random.choice(self.topics[1:])
+            self.topic.set(chosen_topic)
+
+            # Generate random quote based on the chosen topic
+            prompt = f"Generate a timeless and inspiring quote (max 50 characters) about \"{chosen_topic}\" and its author. The quote should be relevant no matter the timeline."
+
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": "You are a quote generator."},
-                    {"role": "user", "content": "Generate an inspiring quote (max 50 characters) and its author:"}
+                    {"role": "system", "content": "You are a quote generator who creates timeless and relevant quotes."},
+                    {"role": "user", "content": prompt}
                 ],
                 max_tokens=50,
-                temperature=0.7,
+                temperature=0.9, # Increased for more creativity
             )
             text = response.choices[0].message.content.strip()
-            
+
             # Split into quote and author
             parts = text.split('-')
             if len(parts) > 1:
-                quote_text = parts[0].strip()
-                author_text = parts[1].strip()
+                quote_text = '-'.join(parts[:-1]).strip()
+                author_text = parts[-1].strip()
             else:
                 quote_text = text
                 author_text = "Unknown"
-                
+
             # Choose random color
             random_color = random.choice(self.colors)
-            
+
             # Update UI
             self.quote_textarea.delete("1.0", tk.END)
             self.quote_textarea.insert(tk.END, quote_text)
             self.author.set(author_text)
             self.template_color.set(random_color)
-            
+
             # Save the card
             self.save_quote_card()
-            
+
         except Exception as e:
             self.status_var.set("Error generating random card")
             messagebox.showerror("Error", f"Error generating random card: {e}")
