@@ -180,7 +180,8 @@ class QuoteCardGenerator:
 
             for word in words:
                 test_line = f"{current_line} {word}".strip()
-                width, _ = draw.textsize(test_line, font=font)
+                bbox = draw.textbbox((0, 0), test_line, font=font)
+                width = bbox[2] - bbox[0]
                 if width <= max_width:
                     current_line = test_line
                 else:
@@ -327,14 +328,17 @@ class QuoteCardGenerator:
             # Draw quote lines
             y = y_start_quote
             for line in quote_lines:
-                line_width, line_height = draw.textsize(line, font=font_quote)
+                bbox = draw.textbbox((0, 0), line, font=font_quote)
+                line_width = bbox[2] - bbox[0]
+                line_height = bbox[3] - bbox[1]
                 x = (img.width - line_width) // 2
                 draw.text((x, y), line, font=font_quote, fill="black")
                 y += line_height + line_spacing
 
             # Draw author below the quote - keeping original spacing
             y += 40
-            line_width, line_height = draw.textsize(author_text, font=font_author)
+            bbox = draw.textbbox((0, 0), author_text, font=font_author)
+            line_width = bbox[2] - bbox[0]
             x = (img.width - line_width) // 2
             draw.text((x, y), author_text, font=font_author, fill="black")
 
