@@ -1,24 +1,16 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
-from openai import OpenAI
+import csv
 import os
 import random
 from datetime import datetime
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-API_KEY = os.getenv("OPENAI_API_KEY")
-
-# Initialize OpenAI client
-client = OpenAI(api_key=API_KEY)
 
 class QuoteCardGenerator:
     def __init__(self, root):
         self.root = root
         self.root.title("Quote Card Generator")
-        self.root.geometry("600x600")  # Increased height for new widgets
+        self.root.geometry("600x600")
         self.root.configure(bg="#f5f5f5")
 
         # Template paths
@@ -33,24 +25,37 @@ class QuoteCardGenerator:
         # List of colors for random selection
         self.colors = list(self.template_paths.keys())
 
-        # Topics for quote generation
-        self.topics = [
-            "Random",
-            "Success & Ambition",
-            "Wisdom & Knowledge",
-            "Creativity & Innovation",
-            "Perseverance & Resilience",
-            "Humanity & Kindness",
-            "Change & Growth",
-            "Courage & Fear",
-        ]
+        # Load quotes from CSV
+        self.quotes = []
+        self.eras = ["Random"]
+        self.load_quotes()
 
         # Variables
         self.template_color = tk.StringVar(value="lime")
         self.author = tk.StringVar()
-        self.topic = tk.StringVar(value="Random")
+        self.era = tk.StringVar(value="Random")
         
         self.create_widgets()
+
+    def load_quotes(self):
+        """Load quotes from quotes.csv"""
+        try:
+            if not os.path.exists("quotes.csv"):
+                messagebox.showerror("Error", "quotes.csv not found!")
+                return
+
+            with open("quotes.csv", mode='r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    self.quotes.append(row)
+                    if row['era'] not in self.eras:
+                        self.eras.append(row['era'])
+            
+            # Sort eras (excluding "Random")
+            temp_eras = sorted([e for e in self.eras if e != "Random"])
+            self.eras = ["Random"] + temp_eras
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load quotes: {e}")
         
     def create_widgets(self):
         # Main frame
@@ -80,16 +85,16 @@ class QuoteCardGenerator:
         author_entry = tk.Entry(quote_frame, textvariable=self.author, width=50)
         author_entry.grid(row=1, column=1, pady=5, padx=5)
 
-        # Topic
-        tk.Label(quote_frame, text="Topic:", bg="#f5f5f5").grid(row=2, column=0, sticky=tk.W, pady=5)
-        topic_dropdown = ttk.Combobox(
+        # Era
+        tk.Label(quote_frame, text="Era:", bg="#f5f5f5").grid(row=2, column=0, sticky=tk.W, pady=5)
+        era_dropdown = ttk.Combobox(
             quote_frame,
-            textvariable=self.topic,
-            values=self.topics,
+            textvariable=self.era,
+            values=self.eras,
             state="readonly",
             width=47
         )
-        topic_dropdown.grid(row=2, column=1, pady=5, padx=5)
+        era_dropdown.grid(row=2, column=1, pady=5, padx=5)
         
         # Template selection
         template_frame = tk.LabelFrame(main_frame, text="Template Settings", padx=10, pady=10, bg="#f5f5f5")
@@ -104,11 +109,6 @@ class QuoteCardGenerator:
             width=47
         )
         color_dropdown.grid(row=0, column=1, pady=5, padx=5)
-        
-        # Preview will be added in a future version
-        # tk.Label(template_frame, text="Preview:", bg="#f5f5f5").grid(row=1, column=0, sticky=tk.W, pady=5)
-        # preview_label = tk.Label(template_frame, text="[Preview will be shown here]", bg="white", width=47, height=5)
-        # preview_label.grid(row=1, column=1, pady=5, padx=5)
         
         # Buttons
         button_frame = tk.Frame(main_frame, bg="#f5f5f5")
@@ -158,13 +158,6 @@ class QuoteCardGenerator:
         )
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         self.status_var.set("Ready")
-        
-        # Check API key on startup
-        if not API_KEY:
-            messagebox.showwarning(
-                "API Key Missing", 
-                "OpenAI API key not found in .env file. Please add OPENAI_API_KEY=your_key to a .env file in the same directory."
-            )
     
     def load_template(self, color):
         """Load the selected template image"""
@@ -194,102 +187,58 @@ class QuoteCardGenerator:
         return lines
     
     def generate_quote(self):
-        """Generate a quote using OpenAI API"""
-        if not API_KEY:
-            messagebox.showerror(
-                "Error",
-                "API Key missing. Please add OPENAI_API_KEY=your_key to a .env file in the same directory."
-            )
+        """Generate a quote from the local CSV based on selected era"""
+        if not self.quotes:
+            messagebox.showerror("Error", "No quotes loaded from quotes.csv")
             return
 
-        self.status_var.set("Generating quote...")
+        self.status_var.set("Selecting quote...")
         self.root.update()
 
         try:
-            topic = self.topic.get()
-            if topic == "Random":
-                # Exclude "Random" from the choice
-                chosen_topic = random.choice(self.topics[1:])
+            selected_era = self.era.get()
+            if selected_era == "Random":
+                chosen_quote = random.choice(self.quotes)
             else:
-                chosen_topic = topic
+                filtered_quotes = [q for q in self.quotes if q['era'] == selected_era]
+                if not filtered_quotes:
+                    messagebox.showwarning("Warning", f"No quotes found for era: {selected_era}")
+                    return
+                chosen_quote = random.choice(filtered_quotes)
 
-            prompt = f"Generate a timeless and inspiring quote (max 50 characters) about \"{chosen_topic}\" and its author. The quote should be relevant no matter the timeline."
-
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a quote generator who creates timeless and relevant quotes."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=50,
-                temperature=0.9,  # Increased for more creativity
-            )
-            text = response.choices[0].message.content.strip()
-
-            # Split into quote and author
-            parts = text.split('-')
-            if len(parts) > 1:
-                quote_text = '-'.join(parts[:-1]).strip()
-                author_text = parts[-1].strip()
-            else:
-                quote_text = text
-                author_text = "Unknown"
+            quote_text = chosen_quote['quote']
+            author_text = chosen_quote['author']
 
             self.quote_textarea.delete("1.0", tk.END)
             self.quote_textarea.insert(tk.END, quote_text)
             self.author.set(author_text)
-            self.status_var.set(f"Generated a quote about {chosen_topic}")
+            self.status_var.set(f"Selected a quote from {chosen_quote['era']} era")
         except Exception as e:
             self.status_var.set("Error")
-            messagebox.showerror("Error", f"OpenAI API Error: {e}")
+            messagebox.showerror("Error", f"Error selecting quote: {e}")
     
     def generate_random_card(self):
-        """Generate a random quote, author, and color and save the card"""
-        if not API_KEY:
-            messagebox.showerror(
-                "Error",
-                "API Key missing. Please add OPENAI_API_KEY=your_key to a .env file in the same directory."
-            )
+        """Pick a random quote, author, and color from local data and save the card"""
+        if not self.quotes:
+            messagebox.showerror("Error", "No quotes loaded from quotes.csv")
             return
 
         self.status_var.set("Generating random quote card...")
         self.root.update()
 
         try:
-            # Choose a random topic from the list (excluding "Random")
-            chosen_topic = random.choice(self.topics[1:])
-            self.topic.set(chosen_topic)
-
-            # Generate random quote based on the chosen topic
-            prompt = f"Generate a timeless and inspiring quote (max 50 characters) about \"{chosen_topic}\" and its author. The quote should be relevant no matter the timeline."
-
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a quote generator who creates timeless and relevant quotes."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=50,
-                temperature=0.9, # Increased for more creativity
-            )
-            text = response.choices[0].message.content.strip()
-
-            # Split into quote and author
-            parts = text.split('-')
-            if len(parts) > 1:
-                quote_text = '-'.join(parts[:-1]).strip()
-                author_text = parts[-1].strip()
-            else:
-                quote_text = text
-                author_text = "Unknown"
-
-            # Choose random color
+            # Choose a random quote from the entire list
+            chosen_quote = random.choice(self.quotes)
+            
+            quote_text = chosen_quote['quote']
+            author_text = chosen_quote['author']
             random_color = random.choice(self.colors)
 
             # Update UI
             self.quote_textarea.delete("1.0", tk.END)
             self.quote_textarea.insert(tk.END, quote_text)
             self.author.set(author_text)
+            self.era.set(chosen_quote['era'])
             self.template_color.set(random_color)
 
             # Save the card
