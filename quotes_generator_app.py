@@ -165,24 +165,50 @@ class QuoteCardGenerator:
         return Image.open(template_path).convert("RGBA")
     
     def wrap_text_with_newlines(self, text, font, max_width, draw):
-        """Wrap text manually and respect newlines"""
+        """Wrap text into balanced lines while respecting manual newlines."""
         lines = []
         for line in text.split("\n"):  # Split by newline to preserve manual line breaks
             words = line.split()
-            current_line = ""
+            if not words:
+                lines.append("")
+                continue
 
-            for word in words:
-                test_line = f"{current_line} {word}".strip()
-                bbox = draw.textbbox((0, 0), test_line, font=font)
-                width = bbox[2] - bbox[0]
-                if width <= max_width:
-                    current_line = test_line
-                else:
-                    lines.append(current_line)
-                    current_line = word
+            line_widths = {}
 
-            if current_line:
-                lines.append(current_line)
+            def get_line_width(start, end):
+                key = (start, end)
+                if key not in line_widths:
+                    test_line = " ".join(words[start:end])
+                    bbox = draw.textbbox((0, 0), test_line, font=font)
+                    line_widths[key] = bbox[2] - bbox[0]
+                return line_widths[key]
+
+            n = len(words)
+            costs = [float("inf")] * (n + 1)
+            breaks = [n] * n
+            costs[n] = 0
+
+            for start in range(n - 1, -1, -1):
+                for end in range(start + 1, n + 1):
+                    width = get_line_width(start, end)
+                    if width > max_width and end > start + 1:
+                        break
+
+                    # Penalize unused space so line lengths are balanced,
+                    # including the final line to avoid tiny tails.
+                    remaining = max(max_width - width, 0)
+                    penalty = remaining ** 2
+
+                    total_cost = penalty + costs[end]
+                    if total_cost < costs[start]:
+                        costs[start] = total_cost
+                        breaks[start] = end
+
+            start = 0
+            while start < n:
+                end = breaks[start]
+                lines.append(" ".join(words[start:end]))
+                start = end
 
         return lines
     
