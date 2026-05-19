@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageTk
 import csv
 import os
 import random
@@ -34,6 +34,8 @@ class QuoteCardGenerator:
         self.template_color = tk.StringVar(value="lime")
         self.author = tk.StringVar()
         self.era = tk.StringVar(value="Random")
+        self.preview_image = None
+        self.preview_photo = None
         
         self.create_widgets()
 
@@ -146,6 +148,31 @@ class QuoteCardGenerator:
             pady=5
         )
         random_button.grid(row=1, column=0, columnspan=2, padx=10, pady=10)
+
+        preview_button = tk.Button(
+            button_frame,
+            text="Preview Quote Card",
+            command=self.preview_quote_card,
+            bg="#FF9800",
+            fg="white",
+            padx=10,
+            pady=5
+        )
+        preview_button.grid(row=2, column=0, columnspan=2, padx=10, pady=5)
+
+        # Preview section
+        preview_frame = tk.LabelFrame(main_frame, text="Preview", padx=10, pady=10, bg="#f5f5f5")
+        preview_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+
+        self.preview_label = tk.Label(
+            preview_frame,
+            text="No preview yet",
+            bg="#ffffff",
+            relief=tk.SUNKEN,
+            width=40,
+            height=12
+        )
+        self.preview_label.pack(fill=tk.BOTH, expand=True)
         
         # Status bar
         self.status_var = tk.StringVar()
@@ -239,6 +266,7 @@ class QuoteCardGenerator:
             self.quote_textarea.insert(tk.END, quote_text)
             self.author.set(author_text)
             self.status_var.set(f"Selected a quote from {chosen_quote['era']} era")
+            self.preview_quote_card()
         except Exception as e:
             self.status_var.set("Error")
             messagebox.showerror("Error", f"Error selecting quote: {e}")
@@ -266,6 +294,7 @@ class QuoteCardGenerator:
             self.author.set(author_text)
             self.era.set(chosen_quote['era'])
             self.template_color.set(random_color)
+            self.preview_quote_card()
 
             # Save the card
             self.save_quote_card()
@@ -273,6 +302,64 @@ class QuoteCardGenerator:
         except Exception as e:
             self.status_var.set("Error generating random card")
             messagebox.showerror("Error", f"Error generating random card: {e}")
+
+    def render_quote_card(self):
+        """Create the final quote card image without saving it."""
+        color = self.template_color.get()
+        img = self.load_template(color)
+        draw = ImageDraw.Draw(img)
+
+        # Load fonts - keeping the original settings
+        font_quote = ImageFont.truetype("arial.ttf", 50)
+        font_author = ImageFont.truetype("arial.ttf", 50)
+
+        # Retrieve quote with manual line breaks
+        quote_text = self.quote_textarea.get("1.0", tk.END).strip()
+        author_text = f"- by {self.author.get()}"
+
+        # Wrap text for quote - keeping original width
+        max_width = img.width - 150
+        quote_lines = self.wrap_text_with_newlines(quote_text, font_quote, max_width, draw)
+
+        # Keep original position settings
+        y_start_quote = 470  # Original coordinate
+        line_spacing = 10
+
+        # Draw quote lines
+        y = y_start_quote
+        for line in quote_lines:
+            bbox = draw.textbbox((0, 0), line, font=font_quote)
+            line_width = bbox[2] - bbox[0]
+            line_height = bbox[3] - bbox[1]
+            x = (img.width - line_width) // 2
+            draw.text((x, y), line, font=font_quote, fill="black")
+            y += line_height + line_spacing
+
+        # Draw author below the quote - keeping original spacing
+        y += 40
+        bbox = draw.textbbox((0, 0), author_text, font=font_author)
+        line_width = bbox[2] - bbox[0]
+        x = (img.width - line_width) // 2
+        draw.text((x, y), author_text, font=font_author, fill="black")
+
+        return img
+
+    def preview_quote_card(self):
+        """Render and display a scaled preview of the quote card."""
+        try:
+            self.status_var.set("Creating preview...")
+            self.root.update()
+
+            self.preview_image = self.render_quote_card()
+            preview = self.preview_image.copy()
+            preview.thumbnail((320, 320), Image.Resampling.LANCZOS)
+            self.preview_photo = ImageTk.PhotoImage(preview)
+
+            self.preview_label.configure(image=self.preview_photo, text="")
+            self.status_var.set("Preview updated")
+        except Exception as e:
+            self.status_var.set("Error creating preview")
+            messagebox.showerror("Error", f"Error creating preview: {e}")
     
     def save_quote_card(self):
         """Create and save the final quote card"""
@@ -281,41 +368,7 @@ class QuoteCardGenerator:
             self.root.update()
             
             color = self.template_color.get()
-            img = self.load_template(color)
-            draw = ImageDraw.Draw(img)
-
-            # Load fonts - keeping the original settings
-            font_quote = ImageFont.truetype("arial.ttf", 50)
-            font_author = ImageFont.truetype("arial.ttf", 50)
-
-            # Retrieve quote with manual line breaks
-            quote_text = self.quote_textarea.get("1.0", tk.END).strip()
-            author_text = f"- by {self.author.get()}"
-
-            # Wrap text for quote - keeping original width
-            max_width = img.width - 150
-            quote_lines = self.wrap_text_with_newlines(quote_text, font_quote, max_width, draw)
-
-            # Keep original position settings
-            y_start_quote = 470  # Original coordinate
-            line_spacing = 10
-
-            # Draw quote lines
-            y = y_start_quote
-            for line in quote_lines:
-                bbox = draw.textbbox((0, 0), line, font=font_quote)
-                line_width = bbox[2] - bbox[0]
-                line_height = bbox[3] - bbox[1]
-                x = (img.width - line_width) // 2
-                draw.text((x, y), line, font=font_quote, fill="black")
-                y += line_height + line_spacing
-
-            # Draw author below the quote - keeping original spacing
-            y += 40
-            bbox = draw.textbbox((0, 0), author_text, font=font_author)
-            line_width = bbox[2] - bbox[0]
-            x = (img.width - line_width) // 2
-            draw.text((x, y), author_text, font=font_author, fill="black")
+            img = self.render_quote_card()
 
             # Save the output
             if not os.path.exists("output"):
