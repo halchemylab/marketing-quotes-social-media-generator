@@ -2,9 +2,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 import csv
-import os
 import random
 from datetime import datetime
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+QUOTES_PATH = BASE_DIR / "quotes.csv"
+OUTPUT_DIR = BASE_DIR / "output"
 
 class QuoteCardGenerator:
     def __init__(self, root):
@@ -15,11 +19,11 @@ class QuoteCardGenerator:
 
         # Template paths
         self.template_paths = {
-            "lime": "lime.jpg",
-            "orange": "orange.jpg",
-            "pink": "pink.jpg",
-            "purple": "purple.jpg",
-            "yellow": "yellow.jpg",
+            "lime": BASE_DIR / "lime.jpg",
+            "orange": BASE_DIR / "orange.jpg",
+            "pink": BASE_DIR / "pink.jpg",
+            "purple": BASE_DIR / "purple.jpg",
+            "yellow": BASE_DIR / "yellow.jpg",
         }
 
         # List of colors for random selection
@@ -42,11 +46,11 @@ class QuoteCardGenerator:
     def load_quotes(self):
         """Load quotes from quotes.csv"""
         try:
-            if not os.path.exists("quotes.csv"):
+            if not QUOTES_PATH.exists():
                 messagebox.showerror("Error", "quotes.csv not found!")
                 return
 
-            with open("quotes.csv", mode='r', encoding='utf-8') as f:
+            with QUOTES_PATH.open(mode='r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     self.quotes.append(row)
@@ -371,11 +375,10 @@ class QuoteCardGenerator:
             img = self.render_quote_card()
 
             # Save the output
-            if not os.path.exists("output"):
-                os.makedirs("output")
+            OUTPUT_DIR.mkdir(exist_ok=True)
             
             today_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            output_path = os.path.join("output", f"{color}_{today_date}.png")
+            output_path = OUTPUT_DIR / f"{color}_{today_date}.png"
             img.save(output_path)
             
             self.status_var.set(f"Quote card saved: {output_path}")
